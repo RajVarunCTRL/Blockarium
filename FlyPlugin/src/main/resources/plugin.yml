@@ -1,0 +1,14 @@
+name: Fly
+main: com.github.rajvarunctrl.Fly
+version: 1.0
+api: ["1.0.0"]
+load: POSTWORLD
+author: RajVarun
+commands:
+  fly:
+    description: Toggle flight mode
+    usage: /fly
+    permission: fly.use
+permissions:
+  fly.use:
+    default: true
