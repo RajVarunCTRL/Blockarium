@@ -1,19 +1,25 @@
 package com.github.rajvarunctrl.game;
 
 import cn.nukkit.Player;
+
 import cn.nukkit.event.EventHandler;
 import cn.nukkit.event.Listener;
 import cn.nukkit.event.inventory.InventoryTransactionEvent;
 import cn.nukkit.event.player.PlayerInteractEvent;
 import cn.nukkit.event.player.PlayerMoveEvent;
+
 import cn.nukkit.inventory.transaction.action.InventoryAction;
 
 import cn.nukkit.item.Item;
+
 import cn.nukkit.level.Location;
 import cn.nukkit.level.Position;
 import cn.nukkit.level.Sound;
+
 import cn.nukkit.scheduler.Task;
+
 import cn.nukkit.utils.Config;
+import cn.nukkit.utils.TextFormat;
 
 import com.github.rajvarunctrl.GameState;
 import com.github.rajvarunctrl.TowerOfRandomness;
@@ -34,8 +40,9 @@ public class GameManager implements Listener {
     public GameManager(TowerOfRandomness plugin, RunningGame runningGame) {
         this.plugin = plugin;
         this.runningGame = runningGame;
-        loadArena();
+        loadArenas();
     }
+
     public boolean joinArena(Player player, String arenaName) {
         Arena arena = arenas.get(arenaName);
         if(arena == null){
@@ -75,8 +82,9 @@ public class GameManager implements Listener {
             startCountdown(arena);
         }
 
-        return True;
+        return true;
     }
+
     public void leaveGame(Player player) {
         Arena arena = getArenaByPlayer(player);
         if (arena != null) {
@@ -107,8 +115,8 @@ public class GameManager implements Listener {
                     List<Location> spawns = arena.getSoloSpawns();
                     List<Player> players = arena.getPlayers();
 
-                    for(int i=0;i<players.size();i++){
-                        players.get(i).teleport(spawns.get(i%spawns.size()));
+                    for (int j=0;j<players.size();j++){
+                        players.get(i).teleport(spawns.get(j % spawns.size()));
                     }
                     frozenPlayers.putIfAbsent(arena,new HashSet<>());
                     for(Player p: players){
@@ -144,7 +152,214 @@ public class GameManager implements Listener {
         arena.setCountdownTask(task);
     }
 
+    public void startGameLoop(Arena arena) {
+        arena.setState(GameState.IN_GAME);
+        arena.setGameTime(600);
+        runningGame.startArenaTask(arena);
 
-    private void loadArena() {}
+        Task task = new Task() {
+            @Override
+            public void onRun(int cuurentTick) {
+                int time = arena.getGameTime();
+                if(time<=0){
+                    plugin.getServer().broadcastMessage("§cGame Over! Time limit reached in arena " + arena.getName());
+                    endGame(arena);
+                    this.getHandler().cancel();
+                    return;
+                }
+                arena.setGameTime(time-1);
+            }
+        };
+        plugin.getServer().getScheduler().scheduleRepeatingTask(plugin, task,20);
+        arena.setGameTask(task);
+    }
 
+    public void endGame(Arena arena) {
+        runningGame.stopArenaTasks(arena);
+        arena.setState(GameState.FINISHED);
+
+        List<Player> players = new ArrayList<>(arena.getPlayers());
+        if(getAlivePlayers(arena).size() == 1){
+            Player winner = getAlivePlayers(arena).get(0);
+            plugin.getServer().broadcastMessage("\n§6[TOR] §e" + winner.getName() + " has won in arena '" + arena.getName() + "'!\n");
+        }
+
+        for (Player player: players) {
+            runningGame.clearScoreboard(player);
+            plugin.getServer().getScheduler().scheduleDelayedTask(plugin,() ->{
+               player.teleport(plugin.getServer().getDefaultLevel().getSafeSpawn());
+               player.getInventory().clearAll();
+               player.sendMessage("§aGame over! Returning to lobby...");
+            }, 5*20);
+        }
+        arena.resetBlocks();
+        arena.clearPlayers();
+        arena.setState(GameState.WAITING);
+    }
+
+    private void loadArenas() {
+        Config config = new Config(new File(plugin.getDataFolder(), "arenas.yml"), Config.YAML);
+        Map<String, Object> arenasSection = (Map<String, Object>) config.get("arenas");
+
+        if (arenasSection == null) {
+            arenas.clear();
+            for(Map.Entry<String,Object> entry: arenasSection.entrySet()) {
+                String arenaName = entry.getKey();
+                Map<String,Object> arenaData = (Map<String, Object>) entry.getValue();
+                String world = (String) arenaData.get("world");
+                cn.nukkit.level.Level level = plugin.getServer().getLevelByName(world);
+                if(level==null){
+                    plugin.getLogger().warning("World '" + world + "' for arena '" + arenaName + "' is not loaded.");
+                    continue;
+                }
+
+                List<Map<String,Object>> spawnList = (List<Map<String,Object>>) arenaData.get("spawns");
+                List<Location> spawns = new ArrayList<>();
+                if(spawnList!=null){
+                    for(Map<String,Object> spawnData : spawnList){
+                        spawns.add(new Location(
+                                ((Number) spawnData.get("x")).doubleValue(),
+                                ((Number) spawnData.get("y")).doubleValue(),
+                                ((Number) spawnData.get("z")).doubleValue(),
+                                spawnData.containsKey("yaw") ? ((Number) spawnData.get("yaw")).floatValue() : 0,
+                                spawnData.containsKey("pitch") ? ((Number) spawnData.get("pitch")).floatValue() : 0,
+                                level));
+                    }
+                }
+                Location waitingLobby = null;
+                Map<String, Object> waitingLobbyMap = (Map<String,Object>) arenaData.get("waitingLobby");
+                if (waitingLobbyMap != null) {
+                    waitingLobby = new Location(((Number) waitingLobbyMap.get("x")).doubleValue(),
+                            ((Number) waitingLobbyMap.get("y")).doubleValue(),
+                            ((Number) waitingLobbyMap.get("z")).doubleValue(), 0, 0, level);
+                }
+                Arena arena = new Arena(arenaName, world, spawns);
+                arena.setWaitingLobby(waitingLobby);
+                arenas.put(arenaName, arena);
+                plugin.getLogger().info("Loaded arena " + arenaName + " with " + spawns.size() + " spawns.");
+            }
+        } else {
+            plugin.getLogger().warning("No arenas defined in arenas.yml");
+        }
+    }
+
+    public void setArenaSpawn(Player player, String arenaName){
+        File file = new File(plugin.getDataFolder(), "arenas.yml");
+        Config config = new Config(file, Config.YAML);
+        Location loc = player.getLocation();
+        Map<String, Object> arenasSection = config.get("arenas", new LinkedHashMap<>());
+        Map<String, Object> arenaData = (Map<String, Object>) arenasSection.getOrDefault(arenaName, new LinkedHashMap<>());
+        arenaData.put("world", loc.getLevel().getName());
+        List<Map<String, Object>> spawns = (List<Map<String, Object>>) arenaData.getOrDefault("spawns", new ArrayList<>());
+        Map<String, Object> spawnPoint = new LinkedHashMap<>();
+        spawnPoint.put("x", loc.getX());
+        spawnPoint.put("y", loc.getY());
+        spawnPoint.put("z", loc.getZ());
+        spawnPoint.put("yaw", loc.getYaw());
+        spawnPoint.put("pitch", loc.getPitch());
+        spawns.add(spawnPoint);
+        arenaData.put("spawns", spawns);
+        arenasSection.put(arenaName, arenaData);
+        config.set("arenas", arenasSection);
+        config.save();
+        loadArenas();
+        player.sendMessage("§aSpawn point saved for arena '" + arenaName + "'.");
+    }
+
+    public void setWaitingLobby(Player player, String arenaName){
+        File file = new File(plugin.getDataFolder(), "arenas.yml");
+        Config config = new Config(file, Config.YAML);
+        Position pos = player.getPosition();
+        Map<String, Object> arenasSection = config.get("arenas", new LinkedHashMap<>());
+        Map<String, Object> arenaData = (Map<String, Object>) arenasSection.getOrDefault(arenaName, new LinkedHashMap<>());
+        arenaData.put("world", player.getLevel().getName());
+        Map<String, Object> waitingPos = new LinkedHashMap<>();
+        waitingPos.put("x", pos.getX());
+        waitingPos.put("y", pos.getY());
+        waitingPos.put("z", pos.getZ());
+        arenaData.put("waitingLobby", waitingPos);
+        arenasSection.put(arenaName, arenaData);
+        config.set("arenas", arenasSection);
+        config.save();
+        loadArenas();
+        player.sendMessage("§aWaiting lobby set for arena '" + arenaName + "'.");
+    }
+
+
+    // EVENT HANDLERS OMG
+    @EventHandler
+    public void onInteractwithHotbarItems(PlayerInteractEvent event){
+        Player player = event.getPlayer();
+        Item item = event.getItem();
+        Arena arena = getArenaByPlayer(player);
+        if(arena==null || arena.getState() != GameState.WAITING) return;
+
+        if(item!=null){
+            if(item.getId() == Item.DRAGON_BREATH){
+                leaveGame(player);
+                event.setCancelled(true);
+            } else if (item.getId() == Item.NETHER_STAR||item.getId()==Item.BLAZE_POWDER) {
+                player.sendMessage("§eComing Soon!");
+                event.setCancelled(true);
+            }
+        }
+
+    }
+
+    // Utility Methods get methods ig
+
+    public Arena getArenaByPlayer(Player player){
+        for(Arena arena: arenas.values()){
+            if(arena.getPlayers().contains(player)){
+                return arena;
+            }
+        }
+        return null;
+    }
+
+    public Arena getArena(String name){
+        return arenas.get(name);
+
+    }
+
+    private List<Player> getAlivePlayers(Arena arena){
+        List<Player> alive = new ArrayList<>();
+        for(Player player: arena.getPlayers()){
+            if(player.isOnline() && player.getGamemode() != Player.SPECTATOR){
+                alive.add(player);
+            }
+
+        }
+        return alive;
+    }
+    // Later USE OF EVENT HANDLERS. :>
+    @EventHandler
+    public void onPlayerDeath(cn.nukkit.event.player.PlayerDeathEvent event){
+        Player player = event.getEntity();
+        Arena arena = getArenaByPlayer(player);
+
+        if(arena!=null && arena.getState() == GameState.IN_GAME){
+            arena.getPlayers().remove(player);
+            player.setGamemode(Player.SPECTATOR);
+
+            // announce death message
+            for(Player p: arena.getPlayers()){
+                p.sendMessage(TextFormat.RED + player.getName() + " was eliminated! "
+                        + TextFormat.AQUA + "(" + getAlivePlayers(arena).size() + " players left)");
+            }
+            
+            event.setDrops(player.getInventory().getContents().values().toArray(new Item[0]));
+            player.getInventory().clearAll();
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(cn.nukkit.event.player.PlayerQuitEvent event){
+        Player player = event.getPlayer();
+        Arena arena = getArenaByPlayer(player);
+
+        if(arena!=null) {
+            leaveGame(player);
+        }
+    }
 }
