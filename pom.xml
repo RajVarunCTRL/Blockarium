@@ -13,7 +13,6 @@
         <module>FlyPlugin</module>
         <module>Outcasts</module>
         <module>TowerOfRandomness</module>
-        <module>TowerOfRandomness/TOR</module>
     </modules>
 
     <properties>
