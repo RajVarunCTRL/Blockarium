@@ -13,6 +13,7 @@ import java.util.*;
 
 public class RunningGame {
     private final TowerOfRandomness plugin;
+    private GameManager gameManager;
     private Random random = new Random();
 
     // maps to store the running tasks of each indv arena.
@@ -22,12 +23,17 @@ public class RunningGame {
     private final List<Item> randomBlocks = new ArrayList<>();
     private final List<Item> randomWeapons = new ArrayList<>();
 
-    public RunningGame(TowerOfRandomness plugin) {
+    public RunningGame(TowerOfRandomness plugin, GameManager gameManager) {
         this.plugin = plugin;
+        this.gameManager = gameManager;
         loadItemPools();
     }
 
-    public void startArenaTask(Arena arena){
+    public void setGameManager(GameManager gameManager){
+        this.gameManager = gameManager;
+    }
+
+    public void startArenaTasks(Arena arena){
         stopArenaTasks(arena);
 
         TaskHandler blockTask = plugin.getServer().getScheduler().scheduleRepeatingTask(
