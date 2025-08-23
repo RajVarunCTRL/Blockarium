@@ -59,6 +59,7 @@ public class GameManager implements Listener {
             player.sendMessage("§cYou're already in this arena!");
             return false;
         }
+        player.setGamemode(Player.ADVENTURE);
         arena.getPlayers().add(player);
         player.teleport(arena.getWaitingLobby());
         player.sendMessage("§aYou have joined the queue for " + arena.getName());
