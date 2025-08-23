@@ -90,6 +90,7 @@ public class GameManager implements Listener {
         Arena arena = getArenaByPlayer(player);
         if (arena != null) {
             arena.getPlayers().remove(player);
+            player.getInventory().clearAll();
             player.sendMessage("§cYou have left the queue.");
             for (Player p : arena.getPlayers()) {
                 p.sendMessage("§e" + player.getName() + " has left! §7[" + arena.getPlayers().size() + "/12]");
