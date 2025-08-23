@@ -36,6 +36,7 @@ public class GameManager implements Listener {
     private final Map<String,Arena> arenas = new HashMap<>();
     private final Map<Arena,Set<UUID>> frozenPlayers = new HashMap<>();
     private final RunningGame runningGame;
+    private final Set<UUID> recentlyEliminated = new HashSet<>();
 
     public GameManager(TowerOfRandomness plugin, RunningGame runningGame) {
         this.plugin = plugin;
@@ -116,7 +117,7 @@ public class GameManager implements Listener {
                     List<Player> players = arena.getPlayers();
 
                     for (int j=0;j<players.size();j++){
-                        players.get(i).teleport(spawns.get(j % spawns.size()));
+                        players.get(j).teleport(spawns.get(j % spawns.size()));
                     }
                     frozenPlayers.putIfAbsent(arena,new HashSet<>());
                     for(Player p: players){
@@ -136,7 +137,7 @@ public class GameManager implements Listener {
                     for(Player p: arena.getPlayers()){
                         p.sendTitle("§aGO!", "");
                         if(frozenPlayers.containsKey(arena)){
-                            frozenPlayers.get(arena).add(p.getUniqueId());
+                            frozenPlayers.get(arena).remove((p.getUniqueId())); // Fixed players not getting unfrozen.
                         }
                         p.sendMessage("\n§7§l» §r§bTower of Randomness: §r§6Build your tower and fight!\n");
                         p.getLevel().addSound(p, Sound.MOB_ENDERDRAGON_GROWL);
@@ -155,11 +156,19 @@ public class GameManager implements Listener {
     public void startGameLoop(Arena arena) {
         arena.setState(GameState.IN_GAME);
         arena.setGameTime(600);
-        runningGame.startArenaTask(arena);
+        runningGame.startArenaTasks(arena);
 
         Task task = new Task() {
             @Override
-            public void onRun(int cuurentTick) {
+            public void onRun(int currentTick) {
+                // Win Condition.
+                List<Player> alive = getAlivePlayers(arena);
+
+                if(alive.size()<=1){
+                    endGame(arena);
+                    this.getHandler().cancel();
+                    return;
+                }
                 int time = arena.getGameTime();
                 if(time<=0){
                     plugin.getServer().broadcastMessage("§cGame Over! Time limit reached in arena " + arena.getName());
@@ -201,7 +210,7 @@ public class GameManager implements Listener {
         Config config = new Config(new File(plugin.getDataFolder(), "arenas.yml"), Config.YAML);
         Map<String, Object> arenasSection = (Map<String, Object>) config.get("arenas");
 
-        if (arenasSection == null) {
+        if (arenasSection != null) {
             arenas.clear();
             for(Map.Entry<String,Object> entry: arenasSection.entrySet()) {
                 String arenaName = entry.getKey();
@@ -285,27 +294,25 @@ public class GameManager implements Listener {
         player.sendMessage("§aWaiting lobby set for arena '" + arenaName + "'.");
     }
 
-
-    // EVENT HANDLERS OMG
-    @EventHandler
-    public void onInteractwithHotbarItems(PlayerInteractEvent event){
-        Player player = event.getPlayer();
-        Item item = event.getItem();
+    public boolean isPlayerFrozen(Player player){
         Arena arena = getArenaByPlayer(player);
-        if(arena==null || arena.getState() != GameState.WAITING) return;
-
-        if(item!=null){
-            if(item.getId() == Item.DRAGON_BREATH){
-                leaveGame(player);
-                event.setCancelled(true);
-            } else if (item.getId() == Item.NETHER_STAR||item.getId()==Item.BLAZE_POWDER) {
-                player.sendMessage("§eComing Soon!");
-                event.setCancelled(true);
-            }
+        if(arena==null){
+            return false;
         }
-
+        return frozenPlayers.containsKey(arena) && frozenPlayers.get(arena).contains(player.getUniqueId());
     }
 
+    public boolean wasPlayerInGame(Player player){
+        return recentlyEliminated.contains(player.getUniqueId());
+    }
+
+    public void addEliminatedPlayer(UUID uuid){
+        recentlyEliminated.add(uuid);
+    }
+
+    public void removeEliminatedPlayer(UUID uuid){
+        recentlyEliminated.remove(uuid);
+    }
     // Utility Methods get methods ig
 
     public Arena getArenaByPlayer(Player player){
@@ -322,7 +329,7 @@ public class GameManager implements Listener {
 
     }
 
-    private List<Player> getAlivePlayers(Arena arena){
+    public List<Player> getAlivePlayers(Arena arena){
         List<Player> alive = new ArrayList<>();
         for(Player player: arena.getPlayers()){
             if(player.isOnline() && player.getGamemode() != Player.SPECTATOR){
@@ -331,35 +338,5 @@ public class GameManager implements Listener {
 
         }
         return alive;
-    }
-    // Later USE OF EVENT HANDLERS. :>
-    @EventHandler
-    public void onPlayerDeath(cn.nukkit.event.player.PlayerDeathEvent event){
-        Player player = event.getEntity();
-        Arena arena = getArenaByPlayer(player);
-
-        if(arena!=null && arena.getState() == GameState.IN_GAME){
-            arena.getPlayers().remove(player);
-            player.setGamemode(Player.SPECTATOR);
-
-            // announce death message
-            for(Player p: arena.getPlayers()){
-                p.sendMessage(TextFormat.RED + player.getName() + " was eliminated! "
-                        + TextFormat.AQUA + "(" + getAlivePlayers(arena).size() + " players left)");
-            }
-            
-            event.setDrops(player.getInventory().getContents().values().toArray(new Item[0]));
-            player.getInventory().clearAll();
-        }
-    }
-
-    @EventHandler
-    public void onPlayerQuit(cn.nukkit.event.player.PlayerQuitEvent event){
-        Player player = event.getPlayer();
-        Arena arena = getArenaByPlayer(player);
-
-        if(arena!=null) {
-            leaveGame(player);
-        }
     }
 }
