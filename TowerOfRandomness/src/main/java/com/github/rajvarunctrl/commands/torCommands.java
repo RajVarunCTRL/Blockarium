@@ -41,7 +41,7 @@ public class torCommands extends Command {
                 String arenaToJoin = args[1];
                 boolean success =  gameManager.joinArena(player, arenaToJoin);
                 if(success){
-                    player.sendMessage(TextFormat.RED + "Arena "+ arenaToJoin+ " not found!");
+                    player.sendMessage(TextFormat.GREEN + "You have joined ToR Arena `"+ arenaToJoin+ "`.");
                 }
 
                 break;
@@ -72,7 +72,7 @@ public class torCommands extends Command {
                 Arena selectedArena = gameManager.getArena(arenaName);
 
                 if(selectedArena == null){
-                    player.sendMessage(TextFormat.RED + "Arena "+ arenaName+ " not found!");
+                    player.sendMessage(TextFormat.DARK_PURPLE + "Arena "+ arenaName+ " not found!");
                     return true;
                 }
 
