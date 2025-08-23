@@ -21,36 +21,28 @@ public class TowerOfRandomness extends PluginBase {
     public void onEnable() {
         getLogger().info("✅ TOR >> Tower of Randomness plugin enabled.");
 
+        // 1. Default Config
         createArenaConfig();
 
-        // Temp gameManager dummy ig
-        GameManager dummyManager = new GameManager(this, null);
+        // 2. Init game classess are correct, order etc.
+        this.runningGame = new RunningGame(this);
 
-        // Init Running game with Dummy GameManager
-        this.runningGame =  new RunningGame(this, dummyManager);
+        //3. create a Gamemanager.
+        this.gameManager = new GameManager(this,this.runningGame);
 
-        // Create real GameManager with dummy??
-        this.gameManager = new GameManager(this, runningGame);
+        //3 Register dedi GameListener
+        this.getServer().getPluginManager().registerEvents(new GameListener(this),this);
 
-        // linking actual GameManager back into Running Game?
-        this.runningGame.setGameManager(this.gameManager);
-
-        // Register game event listeners
-        getServer().getPluginManager().registerEvents(runningGame,this);
-        getServer().getPluginManager().registerEvents(gameManager,this);
-        getServer().getPluginManager().registerEvents(new GameListener(gameManager),this);
-
-        // Registering command
-        getServer().getCommandMap().register("tor", new torCommands(gameManager));
+        //4 registering command handler
+        this.getServer().getCommandMap().register("tor", new torCommands(this.gameManager));
 
         Level level = getServer().getDefaultLevel();
-
-        level.setTime(6000);
-        level.stopTime();
-        level.setRaining(false);
-        level.setThundering(false);
-
-
+        if(level!=null){
+            level.setTime(6000);
+            level.stopTime();
+            level.setRaining(false);
+            level.setThundering(false);
+        }
     }
 
     @Override

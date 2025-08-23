@@ -23,9 +23,8 @@ public class RunningGame {
     private final List<Item> randomBlocks = new ArrayList<>();
     private final List<Item> randomWeapons = new ArrayList<>();
 
-    public RunningGame(TowerOfRandomness plugin, GameManager gameManager) {
+    public RunningGame(TowerOfRandomness plugin) {
         this.plugin = plugin;
-        this.gameManager = gameManager;
         loadItemPools();
     }
 
@@ -42,8 +41,10 @@ public class RunningGame {
         );
         TaskHandler weaponTask = plugin.getServer().getScheduler().scheduleRepeatingTask(
                 plugin, () -> giveRandomWeapons(arena), 30*20
-
         );
+
+        blockTasks.put(arena,blockTask);
+        weaponTasks.put(arena,weaponTask);
     }
 
     public void stopArenaTasks(Arena arena) {
