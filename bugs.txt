@@ -8,3 +8,9 @@
     - make a module to give @player random blocks, from the creative menu, instead of predefined items.
 4. Arena should end after the winner is announced.
     - Fix the event handlers again. Test out later.
+5. Restore arena after placing blocks.
+    - The blocks don't get removed after placing / arena end.
+    - Problem with blockSnapshot.
+    - Problem with restore();
+6. Auto-ignite tnt.
+    - Add pressure plates or auto-ignite tnt.
