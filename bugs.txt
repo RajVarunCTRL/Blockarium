@@ -1,0 +1,10 @@
+1. After player dies, respawns - gets put into spectator, the winner wins.
+   - The person who dies whose in spec, just remains in the lobby. He must be kicked or tped to the default spawn.
+   - Fix: Event Handler, to make the player leave upon death and the arena ends.
+   - Add hotbar items for leave game, when in spectator mode.
+2. The drops are very fast.
+    - The items randomization and player gets stuff very fast. Need to debuff the random items.
+3. Add more randomized items instead of preset items.
+    - make a module to give @player random blocks, from the creative menu, instead of predefined items.
+4. Arena should end after the winner is announced.
+    - Fix the event handlers again. Test out later.
