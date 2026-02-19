@@ -1,4 +1,4 @@
-# End of developmetn cycle for Blockarium.
+# End of development cycle for Blockarium.
 
 
 Development of Blockarium has currently been paused. All plugins that were developed or utilized for the project will be preserved and repurposed for future use where applicable, if the opportunity arises.
